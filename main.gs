@@ -7,9 +7,9 @@ const GYAZO_API_KEY = ""
 //Scrapboxのuidを記入
 const sid = ""
 //Scrapboxのプロジェクト名(https://scrapbox.io/:projectName)
-const projectName = "" 
+const projectName = ""
 //LINEのユーザーIDを記入
-const LINE_USER_ID = ""
+const LINE_USER_ID =[""]
 
 const logSheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet()
 
@@ -21,7 +21,16 @@ const logSheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet()
 async function doPost(e) {
   for (let i = 0; i < JSON.parse(e.postData.contents).events.length; i++) {
     const event = JSON.parse(e.postData.contents).events[i];
-    if (event.source.userId !== LINE_USER_ID) return loglogSheet.appendRow([Utilities.formatDate(new Date(), 'JST', 'yyyy-MM-dd HH:mm:ss'), '無効なユーザーからのリクエスト', event.source.userId])
+    let check = false
+    for(const userId of LINE_USER_ID){
+      if(event.source.userId === userId){
+        check = true
+      }
+    }
+    if(!check){
+       loglogSheet.appendRow([Utilities.formatDate(new Date(), 'JST', 'yyyy-MM-dd HH:mm:ss'), '無効なユーザーからのリクエスト', event.source.userId])
+       return 
+    }
     logSheet.appendRow([Utilities.formatDate(new Date(), 'JST', 'yyyy-MM-dd HH:mm:ss'), 'ユーザーからイベント受付', event])
     const message = await eventHandle(event);
     //応答するメッセージがあった場合
@@ -148,6 +157,7 @@ function getAnnotate(file) {
     return JSON.parse(response.getContentText('UTF-8')).responses;
   } catch (e) {
     console.log('エラー', e)
+    logSheet.appendRow([Utilities.formatDate(new Date(), 'JST', 'yyyy-MM-dd HH:mm:ss'), '文言検出エラー', e.getContentText])
   }
 }
 
@@ -219,8 +229,8 @@ function retrieveSentiment(textData) {
 
     const response = UrlFetchApp.fetch(apiEndpoint, nlOptions);
     return JSON.parse(response)["entities"][0]['name']
-  }catch(e){
-        logSheet.appendRow([Utilities.formatDate(new Date(), 'JST', 'yyyy-MM-dd HH:mm:ss'), '自然言語処理失敗', e])
+  } catch (e) {
+    logSheet.appendRow([Utilities.formatDate(new Date(), 'JST', 'yyyy-MM-dd HH:mm:ss'), '自然言語処理失敗', e])
   }
 
 }
@@ -302,4 +312,19 @@ function importPages() {
   });
   Logger.log(JSON.parse(response).pages[0])
   return 'ok'
+}
+
+function test(){
+  const contentId = '16639049611553'
+   const content = getLineContent(contentId)
+    logSheet.appendRow([Utilities.formatDate(new Date(), 'JST', 'yyyy-MM-dd HH:mm:ss'), 'コンテンツ取得完了', contentId])
+    const allText = getAnnotate(content)
+    logSheet.appendRow([Utilities.formatDate(new Date(), 'JST', 'yyyy-MM-dd HH:mm:ss'), '全文取得完了', allText[0].fullTextAnnotation.text])
+    const imageUrl = uploadGyazo(content)
+    logSheet.appendRow([Utilities.formatDate(new Date(), 'JST', 'yyyy-MM-dd HH:mm:ss'), '画像アップロード完了', imageUrl])
+    const enti = retrieveSentiment(allText[0].fullTextAnnotation.text)
+    logSheet.appendRow([Utilities.formatDate(new Date(), 'JST', 'yyyy-MM-dd HH:mm:ss'), '抽出完了', enti])
+    const exportRes = exportPages(enti, imageUrl, allText[0].fullTextAnnotation.text)
+    logSheet.appendRow([Utilities.formatDate(new Date(), 'JST', 'yyyy-MM-dd HH:mm:ss'), 'すくぼ書き込み完了', exportRes])
+    return { type: "text", text: `自動取り込みを行いました` };
 }
